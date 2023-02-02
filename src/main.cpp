@@ -1,7 +1,12 @@
+//
+//  Author: Ewan Baxter
+//
+
 #include <iostream>
 #include <regex>
 
-#include "fileOps.h"
+#include "../inc/fileOps.h"
+
 
 using namespace std;
 
@@ -10,20 +15,39 @@ using namespace std;
 //https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry
 int MAX_PATH = 259;
 
-bool validateFilepath(string path, const string* extension);
 
-void getFilePath(string* cppPath, const string extension);
+// Prototype declarations
+bool validateFilepath(string* filePath, const string* extension);
+void getFilePath(string* filePath, const string extension);
+string convertToHTML(const string* toConvert);
+
+
+// Custom exception for invalid Windows file path
+struct BadWindowsPath : public exception
+{
+    public:
+        const string what()
+        {
+            return "Invalid Windows file path.";
+        }
+};
+
 
 int main()
 {
 
     string cppPath;
     string htmlPath;
+    string fileContents;
 
     //intro to program
     cout << "**************************************************" << endl;
-    cout << "**************.CPP TO HTML CONVERTER**************" << endl;
-    cout << "**************************************************" << endl << endl << endl;
+    cout << "*************.CPP TO .HTML CONVERTER**************" << endl;
+    cout << "**************************************************" << endl << endl;
+
+
+    cout << "Your .cpp file will be reformatted and saved in a .html file to be read in a browser." << endl << endl;
+    cout << "WARNING: The contents of the .html file will be overwritten." << endl << endl;
 
 
     // getting paths for files
@@ -34,24 +58,21 @@ int main()
     getFilePath(&htmlPath, ".html");
 
 
-    //TODO call method to open .cpp file
+    // calling method to read contents of .cpp file
+    fileOps::readFromFile(&cppPath, &fileContents);
 
-    //TODO call method to read contents of file and save to String
+    // Calling method to convert to html
+    fileContents = convertToHTML(&fileContents);
 
-    //TODO call method to search and replace in String < to &lt > to &gt
-
-    //TODO call method to write String to file, appending <PRE> to start and </PRE> to end
-
-
-    //REGEX FOR LATER ^(?=([a-z]:\\(?:[^\\\/:*?"<>|\r\n]+\\)*[^\\\/:*?"<>|\r\n]*)).{1,254}\.html$ (OR .cpp)
-    https://www.oreilly.com/library/view/regular-expressions-cookbook/9781449327453/ch08s18.html
+    // Calling method to write to file
+    fileOps::writeToFile(&htmlPath, &fileContents);
 
     return 0;
-}
+}   // end main method
 
 
 // Method to get and validate a file path
-void getFilePath(string* cppPath, const string extension) {
+void getFilePath(string* filePath, const string extension) {
 
     bool validPath = false;
 
@@ -61,35 +82,83 @@ void getFilePath(string* cppPath, const string extension) {
         cout
                 << "Enter full path to " + extension + " file (including drive and extension i.e. C:\\folder\\file.cpp):"
                 << endl;
-        cin >> *cppPath;
 
-        //call method to validate the file path and loop if not valid
-        if (!validateFilepath(*cppPath, &extension)) {
-            cout << "That is not a valid path to a " + extension + " file." << endl << endl;
-        } else {
-            validPath = true;
+        getline(cin, *filePath);
+
+        // blank line for spacing in terminal
+        cout << endl;
+
+        try {
+
+            //call method to validate the file path and loop if not valid
+            if (!validateFilepath(filePath, &extension)) {
+                cout << "That is not a path to a " + extension + " file." << endl << endl;
+            } else {
+                validPath = true;
+            }
+        } catch (BadWindowsPath& e) {
+            cout << e.what() << endl << endl;
         }
 
     } while (!validPath);
-}
+
+}   // end getFilePath method
 
 
-// Method to validate that a path is a valid Windows file path, and ends in a given extension
-bool validateFilepath(string path, const string* extension)
+// Method to validate that a filePath is a valid Windows file filePath, and ends in a given extension
+bool validateFilepath(string* filePath, const string* extension)
 {
 
-    const int maxPath = MAX_PATH - extension->length();
+    // Regex from https://www.oreilly.com/library/view/regular-expressions-cookbook/9781449327453/ch08s18.html
+    string windowsPathRegex = "^([a-zA-Z]:\\\\(?:[^\\\\/:*?\"<>|\r\n]+\\\\)*[^\\\\/:*?\"<>|\r\n]*)$";
+    string extensionRegex = ".*\\" + *extension;
 
+    // Checking that filePath is a valid Windows file filePath using regex and testing length
+    if (!regex_match(*filePath, regex(windowsPathRegex)) || filePath->length() > MAX_PATH) {
+        throw BadWindowsPath();
+    }
 
-    std::string pathRegex = "^(?=([a-zA-Z]:\\\\(?:[^\\\\/:*?\"<>|\r\n]+\\\\)*[^\\\\/:*?\"<>|\r\n]*)).{1," + std::to_string(maxPath) + "}\\" + *extension + "$";
-
-    // checking if file path matches regex for valid path
-    if (regex_match(path, regex(pathRegex))) {
+    // checking if file filePath has valid extension
+    if (regex_match(*filePath, regex(extensionRegex))) {
         return true;
     }
     else {
         return false;
     }
 
+}   // end validateFilePath method
 
-}
+
+// Method to format .cpp file for writing to .html
+string convertToHTML(const string* toConvert)
+{
+
+    // Starting converted string with <PRE> tag
+    string converted = "<PRE>\n";
+
+    // Looping and checking every character in string toConvert
+    for (char c: *toConvert) {
+
+        // Checking for < and > and replacing if they occur
+        switch (c) {
+
+            case '<':
+                converted += "&lt";
+                break;
+            case '>':
+                converted += "&gt";
+                break;
+            default:
+                converted += c;
+                break;
+
+        }   // end switch
+
+    }   // end for looop
+
+    // appending </PRE> to the end of the converted string
+    converted += "</PRE>";
+
+    return converted;
+
+}   // end convertToHTML method
